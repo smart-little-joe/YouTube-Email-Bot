@@ -1,4 +1,3 @@
-```text
 yt-dlp
 google-api-python-client
 google-auth-httplib2
@@ -8,4 +7,3 @@ selenium
 webdriver-manager
 requests
 telethon
-```
