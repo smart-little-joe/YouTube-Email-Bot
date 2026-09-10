@@ -24,7 +24,7 @@ from telethon.sessions import StringSession
 from telethon.tl.types import DocumentAttributeFilename, InputMessagesFilterVideo
 from telethon.tl.functions.contacts import SearchRequest
 
-BASE_FOLDER_ID = "12o0xHyXAuj5f3v3nHszVdCKZj8Lxjx-4"
+BASE_FOLDER_ID = "1GgyiVceMxNedDUU3rEyViwLqTRKdwZPx"
 
 CLIENT_ID = os.environ.get('GDRIVE_CLIENT_ID')
 CLIENT_SECRET = os.environ.get('GDRIVE_CLIENT_SECRET')
