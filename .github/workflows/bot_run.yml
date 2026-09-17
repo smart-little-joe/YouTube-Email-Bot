@@ -1,4 +1,3 @@
-```yaml
 name: YouTube Email Bot
 
 on:
@@ -36,4 +35,3 @@ jobs:
         TELEGRAM_API_HASH: ${{ secrets.TELEGRAM_API_HASH }}
         TELEGRAM_SESSION_STRING: ${{ secrets.TELEGRAM_SESSION_STRING }}
       run: python main.py
-```
