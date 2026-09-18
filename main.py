@@ -1,4 +1,3 @@
-```python
 import os
 import re
 import base64
@@ -39,7 +38,7 @@ def get_services():
     creds = Credentials(
         token=None,
         refresh_token=REFRESH_TOKEN,
-        token_uri="https://oauth2.googleapis.com/token",
+        token_uri="[https://oauth2.googleapis.com/token](https://oauth2.googleapis.com/token)",
         client_id=CLIENT_ID,
         client_secret=CLIENT_SECRET
     )
@@ -242,7 +241,7 @@ def process_email(drive_svc, gmail_svc, msg_id):
                             'emailAddress': sender_email
                         }
                     ).execute()
-                except:
+                except Exception:
                     pass
 
             return email_folder_id
@@ -590,7 +589,7 @@ def process_email(drive_svc, gmail_svc, msg_id):
                             else:
                                 entries = [info]
 
-                except:
+                except Exception:
                     continue
 
                 if not entries:
@@ -695,6 +694,8 @@ def process_email(drive_svc, gmail_svc, msg_id):
                                     desc_file
                                 )
 
+            upload_destination = target_folder_id if target_folder_id else get_email_folder()
+
             for root, dirs, files in os.walk(
                 'downloads_temp'
             ):
@@ -719,8 +720,6 @@ def process_email(drive_svc, gmail_svc, msg_id):
                         continue
 
                     try:
-                        folder_to_use = get_email_folder()
-
                         media = MediaFileUpload(
                             file_path,
                             resumable=True
@@ -729,7 +728,7 @@ def process_email(drive_svc, gmail_svc, msg_id):
                         drive_svc.files().create(
                             body={
                                 'name': f,
-                                'parents': [folder_to_use]
+                                'parents': [upload_destination]
                             },
                             media_body=media,
                             fields='id, webViewLink'
@@ -839,4 +838,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-```
