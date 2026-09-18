@@ -38,7 +38,7 @@ def get_services():
     creds = Credentials(
         token=None,
         refresh_token=REFRESH_TOKEN,
-        token_uri="[https://oauth2.googleapis.com/token](https://oauth2.googleapis.com/token)",
+        token_uri="https://oauth2.googleapis.com/token",
         client_id=CLIENT_ID,
         client_secret=CLIENT_SECRET
     )
