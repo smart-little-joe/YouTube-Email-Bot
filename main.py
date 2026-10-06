@@ -663,8 +663,7 @@ def process_email(drive_svc, gmail_svc, msg_id):
                 else:
                     ydl_opts.update({
                         'format':
-                            'bestvideo[ext=mp4]+'
-                            'bestaudio/best[ext=mp4]/best',
+                            'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
                         'merge_output_format':
                             'mp4'
                     })
@@ -708,13 +707,15 @@ def process_email(drive_svc, gmail_svc, msg_id):
                     if file_path.endswith('.description'):
                         continue
 
+                    # החרגת תמונות וקבצי GIF שעשויים להיווצר משגיאות
                     if any(
                         f.lower().endswith(ext)
                         for ext in [
                             '.jpg',
                             '.jpeg',
                             '.png',
-                            '.webp'
+                            '.webp',
+                            '.gif'
                         ]
                     ):
                         continue
