@@ -1,10 +1,11 @@
 import os
 import re
+import time
 import base64
 import requests
 import traceback
 import yt_dlp
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from email.mime.text import MIMEText
 from mutagen.id3 import ID3, USLT
 from mutagen.mp3 import MP3
@@ -20,6 +21,7 @@ from webdriver_manager.chrome import ChromeDriverManager
 
 from telethon.sync import TelegramClient
 from telethon.sessions import StringSession
+from telethon.errors import FloodWaitError
 from telethon.tl.types import DocumentAttributeFilename, InputMessagesFilterVideo
 from telethon.tl.functions.contacts import SearchRequest
 
@@ -32,6 +34,13 @@ REFRESH_TOKEN = os.environ.get('GDRIVE_REFRESH_TOKEN')
 TG_API_ID = os.environ.get('TELEGRAM_API_ID')
 TG_API_HASH = os.environ.get('TELEGRAM_API_HASH')
 TG_SESSION = os.environ.get('TELEGRAM_SESSION_STRING')
+
+# --- הגדרות סנכרון מדיה מהבוט ---
+SOURCE_CHAT = os.environ.get('SOURCE_CHAT') or "KING_OF_TELEGRAM_BETA_BOT"
+SYNC_SUBFOLDER = "מדיה מהבוט"
+SYNC_SCAN_LIMIT = 40
+SYNC_MAX_AGE_HOURS = 48
+SYNC_MAX_FILE_MB = 2000
 
 
 def get_services():
@@ -799,6 +808,96 @@ def process_email(drive_svc, gmail_svc, msg_id):
     return True
 
 
+# ============================================================
+# סנכרון מדיה מהבוט בטלגרם לדרייב
+# ============================================================
+def tg_already_uploaded(drive_svc, key):
+    # בכוונה בלי trashed=false: קובץ שמחקת מהדרייב לא יועלה שוב
+    q = f"appProperties has {{ key='tg_msg' and value='{key}' }}"
+    res = drive_svc.files().list(q=q, fields='files(id)').execute()
+    return bool(res.get('files'))
+
+
+def tg_is_wanted_media(m):
+    if not m.media or m.out:
+        return False
+    if m.sticker:
+        return False
+    return bool(m.video or m.audio or m.voice or m.document)
+
+
+def sync_bot_media(drive_svc):
+    """מעלה לדרייב כל מדיה חדשה שהבוט שלח בצ'אט."""
+    if not (TG_API_ID and TG_API_HASH and TG_SESSION):
+        print("הגדרות טלגרם חסרות בשרת. מדלג על סנכרון מדיה.")
+        return
+
+    folder_id, _ = create_drive_folder(
+        drive_svc, SYNC_SUBFOLDER, BASE_FOLDER_ID, always_create=False
+    )
+
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=SYNC_MAX_AGE_HOURS)
+    sync_dir = 'downloads_sync'
+    os.makedirs(sync_dir, exist_ok=True)
+
+    with TelegramClient(
+        StringSession(TG_SESSION), int(TG_API_ID), TG_API_HASH
+    ) as client:
+        entity = client.get_entity(SOURCE_CHAT)
+
+        wanted = []
+        for m in client.iter_messages(entity, limit=SYNC_SCAN_LIMIT):
+            if m.date < cutoff:
+                break
+            if tg_is_wanted_media(m):
+                wanted.append(m)
+
+        for m in reversed(wanted):  # מהישן לחדש
+            key = f"{entity.id}_{m.id}"
+
+            if tg_already_uploaded(drive_svc, key):
+                continue
+
+            if m.file and m.file.size and m.file.size > SYNC_MAX_FILE_MB * 1024 * 1024:
+                print(f"[Skip] הודעה {m.id} גדולה מדי")
+                continue
+
+            orig = (m.file.name if m.file and m.file.name else None) or (
+                f"media_{m.id}{m.file.ext if m.file and m.file.ext else ''}"
+            )
+            name = f"{m.id}_{orig}"
+            target = os.path.join(sync_dir, name)
+
+            path = None
+            for _ in range(3):
+                try:
+                    path = client.download_media(m, file=target)
+                    break
+                except FloodWaitError as e:
+                    print(f"FloodWait: ממתין {e.seconds} שניות")
+                    time.sleep(e.seconds + 1)
+
+            if path and os.path.exists(path):
+                try:
+                    media = MediaFileUpload(path, resumable=True)
+                    drive_svc.files().create(
+                        body={
+                            'name': name,
+                            'parents': [folder_id],
+                            'appProperties': {'tg_msg': key},
+                        },
+                        media_body=media,
+                        fields='id'
+                    ).execute()
+                    print(f"[Drive] הועלה: {name}")
+                except Exception as e:
+                    print(f"[Drive] שגיאה בהעלאה של {name}: {e}")
+                finally:
+                    os.remove(path)
+
+    shutil.rmtree(sync_dir, ignore_errors=True)
+
+
 def main():
     drive_svc, gmail_svc = get_services()
 
@@ -816,13 +915,7 @@ def main():
         q=query
     ).execute()
 
-    messages = results.get(
-        'messages',
-        []
-    )
-
-    if not messages:
-        return
+    messages = results.get('messages', [])
 
     for msg in messages:
         try:
@@ -835,6 +928,12 @@ def main():
             print(
                 f"שגיאה כללית: {e}"
             )
+
+    # סנכרון מדיה מהבוט (אחרי המיילים, כדי לא לעכב אותם)
+    try:
+        sync_bot_media(drive_svc)
+    except Exception as e:
+        print(f"שגיאה בסנכרון מדיה מהבוט: {e}")
 
 
 if __name__ == "__main__":
